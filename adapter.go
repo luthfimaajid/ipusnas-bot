@@ -55,7 +55,6 @@ func (a *Adapter) Login() {
 	buffToStruct[*LoginResponse](res, &resBody)
 
 	a.AccessToken = resBody.Data.AccessToken
-	// fmt.Println(resBody)
 }
 
 func (a *Adapter) BorrowBook(bookId int, confirm int) (resp BorrowBookResponse) {

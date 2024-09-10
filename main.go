@@ -48,7 +48,7 @@ func main() {
 					count++
 				}
 			} else {
-				// log.Printf("%s tidak bisa dipinjam karena: %s", books[i].title, res.Meta.ErrorMessage)
+				log.Printf("%s tidak bisa dipinjam karena: %s", books[i].title, res.Meta.ErrorMessage)
 			}
 		}
 
