@@ -3,88 +3,100 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
-	"log"
 	"net/http"
+	"time"
 )
 
-type Adapter struct {
-	cfg         *Config
-	AccessToken string
+type adapter struct {
+	cfg *Config
 }
 
-func buffToStruct[T any](res *http.Response, dst T) {
-	resByte, err := io.ReadAll(res.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = json.Unmarshal(resByte, dst)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
-func structToBuff[T any](src T) (buf bytes.Buffer) {
-	err := json.NewEncoder(&buf).Encode(src)
-	if err != nil {
-		log.Fatal(err)
-	}
-
+func encode(src interface{}) (dst *bytes.Buffer, err error) {
+	dst = &bytes.Buffer{}
+	err = json.NewEncoder(dst).Encode(src)
 	return
 }
 
-func (a *Adapter) Login() {
-	account := LoginRequest{
-		Username:     a.cfg.Account.Email,
-		Password:     a.cfg.Account.Password,
+func decode[T any](src io.Reader) (dst *T, err error) {
+	dst = new(T)
+	err = json.NewDecoder(src).Decode(dst)
+	return
+}
+
+func NewIpusnasAPI(c *Config) *adapter {
+	return &adapter{
+		cfg: c,
+	}
+}
+
+func (a *adapter) Login(email string, password string) (account *IpusnasAccount, err error) {
+	account = new(IpusnasAccount)
+	login := LoginRequest{
+		Username:     email,
+		Password:     password,
 		ClientId:     a.cfg.Client.Id,
 		ClientSecret: a.cfg.Client.Secret,
 		DeviceId:     a.cfg.Client.DeviceId,
 	}
 
-	buf := structToBuff[LoginRequest](account)
-
-	res, err := http.Post(a.cfg.Ipusnas.Url+a.cfg.Ipusnas.Api.Login, "application/json", &buf)
+	reqBody, err := encode(login)
 	if err != nil {
-		log.Fatal(err)
+		return
 	}
 
-	var resBody LoginResponse
-	buffToStruct[*LoginResponse](res, &resBody)
+	res, err := http.Post(a.cfg.Ipusnas.Url+a.cfg.Ipusnas.Api.Login, ContentTypeJSON, reqBody)
+	if err != nil {
+		return
+	}
 
-	a.AccessToken = resBody.Data.AccessToken
+	resBody, err := decode[LoginResponse](res.Body)
+	if err != nil {
+		return
+	}
+
+	account.AccessToken = &resBody.Data.AccessToken
+	expDate, err := time.Parse("2006-01-02", resBody.Data.Expired)
+	exp := expDate.Unix()
+
+	if err != nil {
+		return
+	}
+
+	account.AccessTokenExpiry = &exp
+
+	return
 }
 
-func (a *Adapter) BorrowBook(bookId int, confirm int) (resp BorrowBookResponse) {
+func (a *adapter) BorrowBook(bookId int, confirm int) (resBody *BorrowBookResponse, err error) {
 	borrowBookReq := BorrowBookRequest{
-		AccessToken: a.AccessToken,
-		BookId:      bookId,
-		LibraryId:   a.cfg.Ipusnas.LibraryId,
-		Confirm:     confirm,
+		// AccessToken: a.AccessToken,
+		BookId:    bookId,
+		LibraryId: a.cfg.Ipusnas.LibraryId,
+		Confirm:   confirm,
 	}
 
-	buf := structToBuff[BorrowBookRequest](borrowBookReq)
-
-	res, err := http.Post(a.cfg.Ipusnas.Url+a.cfg.Ipusnas.Api.BorrowBook, "application/json", &buf)
+	reqBody, err := encode(borrowBookReq)
 	if err != nil {
-		log.Fatal(err)
+		return
 	}
 
-	buffToStruct[*BorrowBookResponse](res, &resp)
+	res, err := http.Post(a.cfg.Ipusnas.Url+a.cfg.Ipusnas.Api.BorrowBook, ContentTypeJSON, reqBody)
+	if err != nil {
+		return
+	}
+
+	resBody, err = decode[BorrowBookResponse](res.Body)
 
 	return
 }
 
-func (a *Adapter) BookDetail(bookId int) (resp BookDetailResponse) {
-	url := fmt.Sprintf("%s%sclient_id=%s&book_id=%d&access_token=%s", a.cfg.Ipusnas.Url, a.cfg.Ipusnas.Api.BookDetail, a.cfg.Client.Id, bookId, a.AccessToken)
-	res, err := http.Get(url)
-	if err != nil {
-		log.Fatal(err)
-	}
+// func (a *adapter) BookDetail(bookId int) (resBody *BookDetailResponse, err error) {
+// 	url := fmt.Sprintf("%s%sclient_id=%s&book_id=%d&access_token=%s", a.cfg.Ipusnas.Url, a.cfg.Ipusnas.Api.BookDetail, a.cfg.Client.Id, bookId, a.AccessToken)
+// 	res, err := http.Get(url)
+// 	if err != nil {
+// 		return
+// 	}
 
-	buffToStruct[*BookDetailResponse](res, &resp)
-
-	return
-}
+// 	return decode[BookDetailResponse](res.Body)
+// }

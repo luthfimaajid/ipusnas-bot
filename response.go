@@ -11,6 +11,7 @@ type LoginResponse struct {
 	Meta Meta `json:"meta"`
 	Data struct {
 		AccessToken string `json:"access_token"`
+		Expired     string `json:"expired"`
 	} `json:"data"`
 }
 

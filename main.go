@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"log"
-	"time"
+
+	"github.com/jmoiron/sqlx"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type Book struct {
@@ -14,47 +17,72 @@ type Book struct {
 func main() {
 	cfg := LoadEnv()
 
-	adapter := Adapter{
-		cfg: cfg,
+	db := sqlx.MustConnect("sqlite3", "./db/db.sqlite3")
+	defer db.Close()
+
+	r := NewRepository(db)
+	api := NewIpusnasAPI(cfg)
+	uc := NewUsecase(r, api)
+
+	ctx := context.Background()
+
+	// a := IpusnasAccount{
+	// 	Email:    "mowira3737@scarden.com",
+	// 	Password: "Password123",
+	// }
+
+	// err := uc.CreateNewAccount(ctx, a)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	err := uc.RefreshAllToken(ctx)
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	books := []Book{}
+	// adapter := Adapter{
+	// 	cfg: cfg,
+	// }
 
-	for i := 0; i < len(cfg.Targets); i++ {
-		resp := adapter.BookDetail(cfg.Targets[i])
+	// books := []Book{}
 
-		books = append(books, Book{
-			id:         cfg.Targets[i],
-			isBorrowed: false,
-			title:      resp.Data.Book.Title,
-		})
-	}
+	// for i := 0; i < len(cfg.Targets); i++ {
+	// 	resp := adapter.BookDetail(cfg.Targets[i])
 
-	adapter.Login()
+	// 	books = append(books, Book{
+	// 		id:         cfg.Targets[i],
+	// 		isBorrowed: false,
+	// 		title:      resp.Data.Book.Title,
+	// 	})
+	// }
 
-	count := 0
-	for range time.Tick(time.Second * 2) {
-		for i := 0; i < len(books); i++ {
-			if books[i].isBorrowed {
-				continue
-			}
+	// adapter.Login()
 
-			res := adapter.BorrowBook(books[i].id, 0)
-			if res.Meta.ErrorMessage == BorrowBookNeedConfirm {
-				res2 := adapter.BorrowBook(books[i].id, 1)
-				if res2.Meta.Confirm == BorrowBookSuccess {
-					books[i].isBorrowed = true
-					log.Printf("%s berhasil dipinjam!", books[i].title)
-					count++
-				}
-			} else {
-				log.Printf("%s tidak bisa dipinjam karena: %s", books[i].title, res.Meta.ErrorMessage)
-			}
-		}
+	// count := 0
+	// // TODO change delay from config
+	// for range time.Tick(time.Second * 2) {
+	// 	for i := 0; i < len(books); i++ {
+	// 		if books[i].isBorrowed {
+	// 			continue
+	// 		}
 
-		if count == len(books) {
-			log.Printf("Semua buku berhasil dipinjam!")
-			break
-		}
-	}
+	// 		res := adapter.BorrowBook(books[i].id, 0)
+	// 		if res.Meta.ErrorMessage == BorrowBookNeedConfirm {
+	// 			res2 := adapter.BorrowBook(books[i].id, 1)
+	// 			if res2.Meta.Confirm == BorrowBookSuccess {
+	// 				books[i].isBorrowed = true
+	// 				log.Printf("%s berhasil dipinjam!", books[i].title)
+	// 				count++
+	// 			}
+	// 		} else {
+	// 			log.Printf("%s tidak bisa dipinjam karena: %s", books[i].title, res.Meta.ErrorMessage)
+	// 		}
+	// 	}
+
+	// 	if count == len(books) {
+	// 		log.Printf("Semua buku berhasil dipinjam!")
+	// 		break
+	// 	}
+	// }
 }

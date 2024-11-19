@@ -1,1 +1,4 @@
 .env
+ipusnas-bot
+nohup.out
+db/*.sqlite3
